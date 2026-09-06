@@ -1,3 +1,5 @@
+import { useState } from "react";
+import axios from "axios";
 import styled from "styled-components";
 
 const Card = styled.article`
@@ -76,7 +78,78 @@ const Availability = styled.span`
   font-weight: 700;
 `;
 
+const AddButton = styled.button`
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--primary);
+  color: white;
+  font-weight: 800;
+  transition: 0.2s ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+`;
+
+const Message = styled.p`
+  margin: 12px 0 0;
+  font-size: 0.9rem;
+  color: ${({ $error }) => ($error ? "#a64545" : "var(--primary)")};
+`;
+
 function ProductCard({ product }) {
+  const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  const handleAddToCart = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        setIsError(true);
+        setMessage("Please log in to add items to your cart.");
+        return;
+      }
+
+      setAdding(true);
+      setMessage("");
+
+      await axios.post(
+        "http://localhost:3001/api/cart",
+        {
+          productId: product.id,
+          quantity: 1,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      setIsError(false);
+      setMessage("Added to cart");
+    } catch (error) {
+      setIsError(true);
+
+      setMessage(
+        error.response?.data?.message ||
+          "Could not add product to cart."
+      );
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
     <Card>
       <ImageWrapper>
@@ -99,6 +172,20 @@ function ProductCard({ product }) {
         <Availability $available={product.isAvailable}>
           {product.isAvailable ? "Available" : "Unavailable"}
         </Availability>
+
+        <AddButton
+          type="button"
+          onClick={handleAddToCart}
+          disabled={!product.isAvailable || adding}
+        >
+          {adding ? "Adding..." : "Add to cart"}
+        </AddButton>
+
+        {message && (
+          <Message $error={isError}>
+            {message}
+          </Message>
+        )}
       </Content>
     </Card>
   );

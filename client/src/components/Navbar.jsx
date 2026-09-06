@@ -1,4 +1,5 @@
-import { NavLink } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 
 const Nav = styled.nav`
@@ -43,6 +44,20 @@ const StyledLink = styled(NavLink)`
   }
 `;
 
+const CartLink = styled(NavLink)`
+  text-decoration: none;
+  color: #2f6f61;
+  font-weight: 700;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  transition: 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+`;
+
 const LoginButton = styled(NavLink)`
   text-decoration: none;
   background: #f7b267;
@@ -57,16 +72,83 @@ const LoginButton = styled(NavLink)`
   }
 `;
 
+const LogoutButton = styled.button`
+  border: none;
+  background: #f7b267;
+  color: #3f2f23;
+  font-weight: 700;
+  padding: 10px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  transition: 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+`;
+
 function Navbar() {
+  const navigate = useNavigate();
+
+  const [isLoggedIn, setIsLoggedIn] = useState(
+    Boolean(localStorage.getItem("token"))
+  );
+
+  useEffect(() => {
+    const updateAuthState = () => {
+      setIsLoggedIn(Boolean(localStorage.getItem("token")));
+    };
+
+    window.addEventListener("auth-change", updateAuthState);
+    window.addEventListener("storage", updateAuthState);
+
+    return () => {
+      window.removeEventListener("auth-change", updateAuthState);
+      window.removeEventListener("storage", updateAuthState);
+    };
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+
+    window.dispatchEvent(new Event("auth-change"));
+
+    navigate("/login");
+  };
+
   return (
     <Nav>
       <Logo to="/">FreshBite</Logo>
 
       <Links>
-        <StyledLink to="/">Home</StyledLink>
-        <StyledLink to="/restaurants">Restaurants</StyledLink>
+        <StyledLink to="/">
+          Home
+        </StyledLink>
 
-        <LoginButton to="/login">Login</LoginButton>
+        <StyledLink to="/restaurants">
+          Restaurants
+        </StyledLink>
+
+        {isLoggedIn && (
+          <CartLink to="/cart">
+            🛒 Cart
+          </CartLink>
+        )}
+
+        {isLoggedIn ? (
+          <LogoutButton
+            type="button"
+            onClick={handleLogout}
+          >
+            Logout
+          </LogoutButton>
+        ) : (
+          <LoginButton to="/login">
+            Login
+          </LoginButton>
+        )}
       </Links>
     </Nav>
   );
