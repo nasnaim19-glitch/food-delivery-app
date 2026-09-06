@@ -3,6 +3,12 @@ import logger from "../config/logger.js";
 
 const TIME_ZONE = "Asia/Jerusalem";
 
+const TRACKING_TIMES = {
+  PREPARING: 1,
+  READY: 3,
+  DELIVERED: 5,
+};
+
 const getCurrentMinutesInIsrael = () => {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: TIME_ZONE,
@@ -32,8 +38,7 @@ const isRestaurantHappyHourActive = (restaurant) => {
     return false;
   }
 
-  const currentMinutes =
-    getCurrentMinutesInIsrael();
+  const currentMinutes = getCurrentMinutesInIsrael();
 
   const startMinutes =
     restaurant.happyHourStartMinutes;
@@ -93,13 +98,231 @@ const getProductPricing = (product) => {
   };
 };
 
+const getTrackingStatus = (createdAt) => {
+  const createdTime =
+    new Date(createdAt).getTime();
+
+  const now =
+    Date.now();
+
+  const elapsedMilliseconds =
+    now - createdTime;
+
+  const elapsedMinutes =
+    elapsedMilliseconds / 60000;
+
+  if (
+    elapsedMinutes >=
+    TRACKING_TIMES.DELIVERED
+  ) {
+    return "DELIVERED";
+  }
+
+  if (
+    elapsedMinutes >=
+    TRACKING_TIMES.READY
+  ) {
+    return "READY";
+  }
+
+  if (
+    elapsedMinutes >=
+    TRACKING_TIMES.PREPARING
+  ) {
+    return "PREPARING";
+  }
+
+  return "PENDING";
+};
+
+const getTrackingInfo = (order) => {
+  const createdTime =
+    new Date(order.createdAt).getTime();
+
+  const now =
+    Date.now();
+
+  const elapsedMilliseconds =
+    Math.max(
+      0,
+      now - createdTime
+    );
+
+  const elapsedMinutes =
+    elapsedMilliseconds / 60000;
+
+  const totalTrackingMinutes =
+    TRACKING_TIMES.DELIVERED;
+
+  const remainingMinutes =
+    Math.max(
+      0,
+      Math.ceil(
+        totalTrackingMinutes -
+          elapsedMinutes
+      )
+    );
+
+  const progressPercent =
+    Math.min(
+      100,
+      Math.max(
+        0,
+        Math.round(
+          (elapsedMinutes /
+            totalTrackingMinutes) *
+            100
+        )
+      )
+    );
+
+  const status =
+    getTrackingStatus(
+      order.createdAt
+    );
+
+  const estimatedDeliveryAt =
+    new Date(
+      createdTime +
+        totalTrackingMinutes *
+          60000
+    );
+
+  const steps = [
+    {
+      key: "PENDING",
+      label: "Order received",
+      description:
+        "The restaurant received your order.",
+    },
+    {
+      key: "PREPARING",
+      label: "Preparing",
+      description:
+        "Your food is being prepared.",
+    },
+    {
+      key: "READY",
+      label: "Ready",
+      description:
+        "Your order is ready.",
+    },
+    {
+      key: "DELIVERED",
+      label: "Delivered",
+      description:
+        "Your order has been completed.",
+    },
+  ];
+
+  const statusOrder = [
+    "PENDING",
+    "PREPARING",
+    "READY",
+    "DELIVERED",
+  ];
+
+  const currentStepIndex =
+    statusOrder.indexOf(status);
+
+  const stepsWithState =
+    steps.map(
+      (step, index) => ({
+        ...step,
+
+        completed:
+          index <
+          currentStepIndex,
+
+        active:
+          index ===
+          currentStepIndex,
+
+        pending:
+          index >
+          currentStepIndex,
+      })
+    );
+
+  return {
+    status,
+
+    progressPercent,
+
+    elapsedMinutes:
+      Number(
+        elapsedMinutes.toFixed(1)
+      ),
+
+    remainingMinutes,
+
+    estimatedDeliveryAt:
+      estimatedDeliveryAt.toISOString(),
+
+    isCompleted:
+      status === "DELIVERED",
+
+    currentStep:
+      currentStepIndex + 1,
+
+    totalSteps:
+      steps.length,
+
+    steps:
+      stepsWithState,
+  };
+};
+
+const syncOrderStatus = async (
+  order
+) => {
+  const tracking =
+    getTrackingInfo(order);
+
+  if (
+    order.status !==
+    tracking.status
+  ) {
+    const updatedOrder =
+      await prisma.order.update({
+        where: {
+          id: order.id,
+        },
+
+        data: {
+          status:
+            tracking.status,
+        },
+
+        include: {
+          restaurant: true,
+          items: true,
+        },
+      });
+
+    return {
+      ...updatedOrder,
+      tracking:
+        getTrackingInfo(
+          updatedOrder
+        ),
+    };
+  }
+
+  return {
+    ...order,
+    tracking,
+  };
+};
+
 // POST /api/orders
 export const createOrder = async (
   req,
   res
 ) => {
   try {
-    const userId = req.user.userId;
+    const userId =
+      req.user.userId;
 
     const cart =
       await prisma.cart.findUnique({
@@ -145,7 +368,9 @@ export const createOrder = async (
           restaurantId
       );
 
-    if (hasMultipleRestaurants) {
+    if (
+      hasMultipleRestaurants
+    ) {
       return res.status(400).json({
         message:
           "Cart contains products from multiple restaurants",
@@ -180,17 +405,18 @@ export const createOrder = async (
         };
       });
 
-    const totalPrice = Number(
-      orderItems
-        .reduce(
-          (sum, item) =>
-            sum +
-            item.unitPrice *
-              item.quantity,
-          0
-        )
-        .toFixed(2)
-    );
+    const totalPrice =
+      Number(
+        orderItems
+          .reduce(
+            (sum, item) =>
+              sum +
+              item.unitPrice *
+                item.quantity,
+            0
+          )
+          .toFixed(2)
+      );
 
     const order =
       await prisma.$transaction(
@@ -224,10 +450,20 @@ export const createOrder = async (
         }
       );
 
+    const orderWithTracking = {
+      ...order,
+      tracking:
+        getTrackingInfo(
+          order
+        ),
+    };
+
     return res.status(201).json({
       message:
         "Order created successfully",
-      order,
+
+      order:
+        orderWithTracking,
     });
   } catch (error) {
     logger.error(error);
@@ -245,7 +481,8 @@ export const getOrders = async (
   res
 ) => {
   try {
-    const userId = req.user.userId;
+    const userId =
+      req.user.userId;
 
     const orders =
       await prisma.order.findMany({
@@ -263,9 +500,21 @@ export const getOrders = async (
         },
       });
 
+    const ordersWithTracking =
+      await Promise.all(
+        orders.map(
+          (order) =>
+            syncOrderStatus(
+              order
+            )
+        )
+      );
+
     return res
       .status(200)
-      .json(orders);
+      .json(
+        ordersWithTracking
+      );
   } catch (error) {
     logger.error(error);
 
@@ -282,11 +531,13 @@ export const getOrderById = async (
   res
 ) => {
   try {
-    const userId = req.user.userId;
+    const userId =
+      req.user.userId;
 
-    const orderId = Number(
-      req.params.id
-    );
+    const orderId =
+      Number(
+        req.params.id
+      );
 
     if (
       !Number.isInteger(orderId) ||
@@ -318,9 +569,16 @@ export const getOrderById = async (
       });
     }
 
+    const orderWithTracking =
+      await syncOrderStatus(
+        order
+      );
+
     return res
       .status(200)
-      .json(order);
+      .json(
+        orderWithTracking
+      );
   } catch (error) {
     logger.error(error);
 

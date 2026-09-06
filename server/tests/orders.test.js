@@ -20,6 +20,8 @@ const token = jwt.sign(
 );
 
 let temporaryUserId = null;
+let temporaryUserToken = null;
+let trackingOrderId = null;
 let originalBurgerBloomSettings = null;
 
 after(async () => {
@@ -28,6 +30,14 @@ after(async () => {
       await prisma.order.deleteMany({
         where: {
           userId: temporaryUserId,
+        },
+      });
+
+      await prisma.cartItem.deleteMany({
+        where: {
+          cart: {
+            userId: temporaryUserId,
+          },
         },
       });
 
@@ -49,6 +59,7 @@ after(async () => {
         where: {
           id: originalBurgerBloomSettings.id,
         },
+
         data: {
           happyHourStartMinutes:
             originalBurgerBloomSettings.happyHourStartMinutes,
@@ -214,12 +225,11 @@ test(
         restaurant.happyHourEnabled,
     };
 
-    // Make Happy Hour active for the entire day
-    // so the test does not depend on the current clock.
     await prisma.restaurant.update({
       where: {
         id: restaurant.id,
       },
+
       data: {
         happyHourStartMinutes: 0,
         happyHourEndMinutes: 1440,
@@ -309,7 +319,7 @@ test(
         })
         .expect(200);
 
-    const userToken =
+    temporaryUserToken =
       loginResponse.body.token;
 
     const restaurant =
@@ -317,6 +327,7 @@ test(
         where: {
           name: "Burger Bloom",
         },
+
         include: {
           categories: {
             include: {
@@ -355,7 +366,7 @@ test(
       .post("/api/cart")
       .set(
         "Authorization",
-        `Bearer ${userToken}`
+        `Bearer ${temporaryUserToken}`
       )
       .send({
         productId: product.id,
@@ -368,7 +379,7 @@ test(
         .get("/api/cart")
         .set(
           "Authorization",
-          `Bearer ${userToken}`
+          `Bearer ${temporaryUserToken}`
         )
         .expect(200);
 
@@ -400,7 +411,7 @@ test(
         .post("/api/orders")
         .set(
           "Authorization",
-          `Bearer ${userToken}`
+          `Bearer ${temporaryUserToken}`
         )
         .expect(201);
 
@@ -445,7 +456,7 @@ test(
         .get("/api/cart")
         .set(
           "Authorization",
-          `Bearer ${userToken}`
+          `Bearer ${temporaryUserToken}`
         )
         .expect(200);
 
@@ -457,6 +468,253 @@ test(
     assert.equal(
       cartAfterOrder.body.total,
       0
+    );
+  }
+);
+
+test(
+  "POST /api/orders should return tracking information for a new order",
+  async () => {
+    assert.ok(temporaryUserToken);
+
+    const restaurant =
+      await prisma.restaurant.findFirst({
+        where: {
+          name: "Burger Bloom",
+        },
+
+        include: {
+          categories: {
+            include: {
+              products: true,
+            },
+          },
+        },
+      });
+
+    assert.ok(restaurant);
+
+    const product =
+      restaurant.categories
+        .flatMap(
+          (category) =>
+            category.products
+        )
+        .find(
+          (item) =>
+            item.isAvailable
+        );
+
+    assert.ok(product);
+
+    await request(app)
+      .post("/api/cart")
+      .set(
+        "Authorization",
+        `Bearer ${temporaryUserToken}`
+      )
+      .send({
+        productId: product.id,
+        quantity: 1,
+      })
+      .expect(201);
+
+    const response =
+      await request(app)
+        .post("/api/orders")
+        .set(
+          "Authorization",
+          `Bearer ${temporaryUserToken}`
+        )
+        .expect(201);
+
+    const order =
+      response.body.order;
+
+    trackingOrderId =
+      order.id;
+
+    assert.ok(order.tracking);
+
+    assert.equal(
+      order.tracking.status,
+      "PENDING"
+    );
+
+    assert.equal(
+      order.status,
+      "PENDING"
+    );
+
+    assert.equal(
+      order.tracking.currentStep,
+      1
+    );
+
+    assert.equal(
+      order.tracking.totalSteps,
+      4
+    );
+
+    assert.equal(
+      order.tracking.isCompleted,
+      false
+    );
+
+    assert.ok(
+      Array.isArray(
+        order.tracking.steps
+      )
+    );
+
+    assert.equal(
+      order.tracking.steps.length,
+      4
+    );
+
+    assert.deepEqual(
+      order.tracking.steps.map(
+        (step) => step.key
+      ),
+      [
+        "PENDING",
+        "PREPARING",
+        "READY",
+        "DELIVERED",
+      ]
+    );
+
+    assert.equal(
+      order.tracking.steps[0].active,
+      true
+    );
+
+    assert.equal(
+      order.tracking.steps[1].pending,
+      true
+    );
+
+    assert.ok(
+      order.tracking.progressPercent >= 0
+    );
+
+    assert.ok(
+      order.tracking.progressPercent < 100
+    );
+
+    assert.ok(
+      order.tracking.remainingMinutes > 0
+    );
+
+    assert.ok(
+      order.tracking.estimatedDeliveryAt
+    );
+  }
+);
+
+test(
+  "GET /api/orders/:id should automatically progress an old order to DELIVERED",
+  async () => {
+    assert.ok(trackingOrderId);
+    assert.ok(temporaryUserToken);
+
+    const oldCreatedAt =
+      new Date(
+        Date.now() -
+          6 * 60 * 1000
+      );
+
+    await prisma.order.update({
+      where: {
+        id: trackingOrderId,
+      },
+
+      data: {
+        createdAt: oldCreatedAt,
+        status: "PENDING",
+      },
+    });
+
+    const response =
+      await request(app)
+        .get(
+          `/api/orders/${trackingOrderId}`
+        )
+        .set(
+          "Authorization",
+          `Bearer ${temporaryUserToken}`
+        )
+        .expect(200);
+
+    assert.equal(
+      response.body.status,
+      "DELIVERED"
+    );
+
+    assert.ok(
+      response.body.tracking
+    );
+
+    assert.equal(
+      response.body.tracking.status,
+      "DELIVERED"
+    );
+
+    assert.equal(
+      response.body.tracking.isCompleted,
+      true
+    );
+
+    assert.equal(
+      response.body.tracking.currentStep,
+      4
+    );
+
+    assert.equal(
+      response.body.tracking.totalSteps,
+      4
+    );
+
+    assert.equal(
+      response.body.tracking.progressPercent,
+      100
+    );
+
+    assert.equal(
+      response.body.tracking.remainingMinutes,
+      0
+    );
+
+    assert.equal(
+      response.body.tracking.steps[0].completed,
+      true
+    );
+
+    assert.equal(
+      response.body.tracking.steps[1].completed,
+      true
+    );
+
+    assert.equal(
+      response.body.tracking.steps[2].completed,
+      true
+    );
+
+    assert.equal(
+      response.body.tracking.steps[3].active,
+      true
+    );
+
+    const savedOrder =
+      await prisma.order.findUnique({
+        where: {
+          id: trackingOrderId,
+        },
+      });
+
+    assert.equal(
+      savedOrder.status,
+      "DELIVERED"
     );
   }
 );
