@@ -5,6 +5,180 @@ import styled from "styled-components";
 import RestaurantCard from "../components/RestaurantCard.jsx";
 import SearchBar from "../components/SearchBar.jsx";
 
+const RESTAURANTS_API_URL =
+  "http://localhost:3001/api/restaurants";
+
+const FAVORITES_API_URL =
+  "http://localhost:3001/api/favorites";
+
+function Restaurants() {
+  const [restaurants, setRestaurants] = useState([]);
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const restaurantsResponse = await axios.get(
+          RESTAURANTS_API_URL
+        );
+
+        setRestaurants(restaurantsResponse.data);
+
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+          setFavoriteIds([]);
+          return;
+        }
+
+        try {
+          const favoritesResponse = await axios.get(
+            FAVORITES_API_URL,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          const ids = favoritesResponse.data.map(
+            (favorite) => favorite.restaurantId
+          );
+
+          setFavoriteIds(ids);
+        } catch (favoritesError) {
+          console.error(
+            "Failed to fetch favorites:",
+            favoritesError
+          );
+
+          setFavoriteIds([]);
+        }
+      } catch (err) {
+        console.error(
+          "Failed to fetch restaurants:",
+          err
+        );
+
+        setError(
+          "Could not load restaurants. Please try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const handleFavoriteChange = (
+    restaurantId,
+    isFavorite
+  ) => {
+    setFavoriteIds((currentIds) => {
+      if (isFavorite) {
+        if (currentIds.includes(restaurantId)) {
+          return currentIds;
+        }
+
+        return [...currentIds, restaurantId];
+      }
+
+      return currentIds.filter(
+        (id) => id !== restaurantId
+      );
+    });
+  };
+
+  const filteredRestaurants = useMemo(() => {
+    const normalizedSearch =
+      search.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return restaurants;
+    }
+
+    return restaurants.filter((restaurant) => {
+      return (
+        restaurant.name
+          .toLowerCase()
+          .includes(normalizedSearch) ||
+        restaurant.city
+          ?.toLowerCase()
+          .includes(normalizedSearch)
+      );
+    });
+  }, [restaurants, search]);
+
+  if (loading) {
+    return (
+      <Message>
+        Loading restaurants...
+      </Message>
+    );
+  }
+
+  if (error) {
+    return (
+      <Message>
+        {error}
+      </Message>
+    );
+  }
+
+  return (
+    <Page>
+      <Header>
+        <Title>
+          Find your next favorite restaurant
+        </Title>
+
+        <Subtitle>
+          Explore fresh places, discover new flavors and
+          choose what fits your mood today.
+        </Subtitle>
+
+        <SearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search by restaurant or city..."
+        />
+      </Header>
+
+      {filteredRestaurants.length === 0 ? (
+        <Message>
+          No restaurants found.
+        </Message>
+      ) : (
+        <Grid>
+          {filteredRestaurants.map(
+            (restaurant) => (
+              <RestaurantCard
+                key={restaurant.id}
+                restaurant={restaurant}
+                initiallyFavorite={favoriteIds.includes(
+                  restaurant.id
+                )}
+                onFavoriteChange={
+                  handleFavoriteChange
+                }
+              />
+            )
+          )}
+        </Grid>
+      )}
+    </Page>
+  );
+}
+
+export default Restaurants;
+
 const Page = styled.main`
   padding: 56px 0 80px;
 `;
@@ -51,89 +225,3 @@ const Message = styled.div`
   border: 1px solid var(--border);
   color: var(--text-soft);
 `;
-
-function Restaurants() {
-  const [restaurants, setRestaurants] = useState([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const fetchRestaurants = async () => {
-      try {
-        setLoading(true);
-
-        const response = await axios.get(
-          "http://localhost:3001/api/restaurants"
-        );
-
-        setRestaurants(response.data);
-        setError("");
-      } catch (err) {
-        console.error("Failed to fetch restaurants:", err);
-        setError("Could not load restaurants. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchRestaurants();
-  }, []);
-
-  const filteredRestaurants = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-
-    if (!normalizedSearch) {
-      return restaurants;
-    }
-
-    return restaurants.filter((restaurant) => {
-      return (
-        restaurant.name.toLowerCase().includes(normalizedSearch) ||
-        restaurant.city?.toLowerCase().includes(normalizedSearch)
-      );
-    });
-  }, [restaurants, search]);
-
-  if (loading) {
-    return <Message>Loading restaurants...</Message>;
-  }
-
-  if (error) {
-    return <Message>{error}</Message>;
-  }
-
-  return (
-    <Page>
-      <Header>
-        <Title>Find your next favorite restaurant</Title>
-
-        <Subtitle>
-          Explore fresh places, discover new flavors and choose what fits your
-          mood today.
-        </Subtitle>
-
-        <SearchBar
-          value={search}
-          onChange={setSearch}
-          placeholder="Search by restaurant or city..."
-        />
-      </Header>
-
-      {filteredRestaurants.length === 0 ? (
-        <Message>No restaurants found.</Message>
-      ) : (
-        <Grid>
-          {filteredRestaurants.map((restaurant) => (
-            <RestaurantCard
-              key={restaurant.id}
-              restaurant={restaurant}
-            />
-          ))}
-        </Grid>
-      )}
-    </Page>
-  );
-}
-
-export default Restaurants;

@@ -9,6 +9,7 @@ import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import Orders from "./pages/Orders.jsx";
 import OrderDetails from "./pages/OrderDetails.jsx";
+import Favorites from "./pages/Favorites.jsx";
 import ErrorPage from "./pages/ErrorPage.jsx";
 
 function App() {
@@ -52,6 +53,11 @@ function App() {
         <Route
           path="/orders/:id"
           element={<OrderDetails />}
+        />
+
+        <Route
+          path="/favorites"
+          element={<Favorites />}
         />
 
         <Route

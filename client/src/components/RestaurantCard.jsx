@@ -1,5 +1,10 @@
+import { useEffect, useState } from "react";
+import axios from "axios";
 import { Link } from "react-router-dom";
 import styled, { keyframes } from "styled-components";
+
+const FAVORITES_API_URL =
+  "http://localhost:3001/api/favorites";
 
 const happyGlow = keyframes`
   0% {
@@ -19,6 +24,20 @@ const happyGlow = keyframes`
     box-shadow:
       0 0 0 2px rgba(255, 107, 87, 0.65),
       0 0 18px rgba(255, 107, 87, 0.22);
+  }
+`;
+
+const favoritePop = keyframes`
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.22);
+  }
+
+  100% {
+    transform: scale(1);
   }
 `;
 
@@ -81,6 +100,43 @@ const HappyTitle = styled.strong`
 const HappyDiscount = styled.span`
   font-size: 0.8rem;
   font-weight: 800;
+`;
+
+const FavoriteButton = styled.button`
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  color: ${({ $favorite }) =>
+    $favorite ? "#e85656" : "#706b67"};
+  font-size: 1.35rem;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(32, 28, 25, 0.16);
+  backdrop-filter: blur(8px);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+
+  animation: ${({ $favorite }) =>
+      $favorite ? favoritePop : "none"}
+    0.3s ease;
+
+  &:hover:not(:disabled) {
+    transform: scale(1.08);
+    background: white;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
 `;
 
 const Content = styled.div`
@@ -157,6 +213,14 @@ const HappyHourInfo = styled.div`
   line-height: 1.5;
 `;
 
+const FavoriteMessage = styled.p`
+  margin: 14px 0 0;
+  color: ${({ $error }) =>
+    $error ? "#a64545" : "var(--primary)"};
+  font-size: 0.85rem;
+  font-weight: 700;
+`;
+
 const ViewButton = styled(Link)`
   display: inline-flex;
   margin-top: 20px;
@@ -173,9 +237,97 @@ const ViewButton = styled(Link)`
   }
 `;
 
-function RestaurantCard({ restaurant }) {
+function RestaurantCard({
+  restaurant,
+  initiallyFavorite = false,
+  onFavoriteChange,
+}) {
   const isHappyHour =
     restaurant.isHappyHourActive === true;
+
+  const [isFavorite, setIsFavorite] =
+    useState(initiallyFavorite);
+
+  const [favoriteLoading, setFavoriteLoading] =
+    useState(false);
+
+  const [favoriteMessage, setFavoriteMessage] =
+    useState("");
+
+  const [favoriteError, setFavoriteError] =
+    useState(false);
+
+  useEffect(() => {
+    setIsFavorite(initiallyFavorite);
+  }, [initiallyFavorite]);
+
+  const handleFavoriteClick = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        setFavoriteError(true);
+        setFavoriteMessage(
+          "Please log in to save favorites."
+        );
+        return;
+      }
+
+      setFavoriteLoading(true);
+      setFavoriteMessage("");
+      setFavoriteError(false);
+
+      if (isFavorite) {
+        await axios.delete(
+          `${FAVORITES_API_URL}/${restaurant.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        setIsFavorite(false);
+        setFavoriteMessage(
+          "Removed from favorites"
+        );
+
+        onFavoriteChange?.(
+          restaurant.id,
+          false
+        );
+      } else {
+        await axios.post(
+          `${FAVORITES_API_URL}/${restaurant.id}`,
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        setIsFavorite(true);
+        setFavoriteMessage(
+          "Added to favorites ❤️"
+        );
+
+        onFavoriteChange?.(
+          restaurant.id,
+          true
+        );
+      }
+    } catch (error) {
+      setFavoriteError(true);
+
+      setFavoriteMessage(
+        error.response?.data?.message ||
+          "Could not update favorites."
+      );
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
 
   return (
     <Card $happy={isHappyHour}>
@@ -192,15 +344,44 @@ function RestaurantCard({ restaurant }) {
             </HappyTitle>
 
             <HappyDiscount>
-              {restaurant.happyHour?.discountPercent}% OFF
+              {
+                restaurant.happyHour
+                  ?.discountPercent
+              }
+              % OFF
             </HappyDiscount>
           </HappyHourBadge>
         )}
+
+        <FavoriteButton
+          type="button"
+          onClick={handleFavoriteClick}
+          disabled={favoriteLoading}
+          $favorite={isFavorite}
+          aria-label={
+            isFavorite
+              ? `Remove ${restaurant.name} from favorites`
+              : `Add ${restaurant.name} to favorites`
+          }
+          title={
+            isFavorite
+              ? "Remove from favorites"
+              : "Add to favorites"
+          }
+        >
+          {favoriteLoading
+            ? "…"
+            : isFavorite
+              ? "♥"
+              : "♡"}
+        </FavoriteButton>
       </ImageWrapper>
 
       <Content>
         <TopRow>
-          <Name>{restaurant.name}</Name>
+          <Name>
+            {restaurant.name}
+          </Name>
 
           <Rating>
             ⭐ {restaurant.rating}
@@ -219,7 +400,9 @@ function RestaurantCard({ restaurant }) {
             </Tag>
           )}
 
-          <StatusTag $isOpen={restaurant.isOpen}>
+          <StatusTag
+            $isOpen={restaurant.isOpen}
+          >
             {restaurant.isOpen
               ? "Open now"
               : "Closed"}
@@ -230,10 +413,24 @@ function RestaurantCard({ restaurant }) {
           <HappyHourInfo>
             🔥 50% OFF is active now
             <br />
-            {restaurant.happyHour?.startTime}
+            {
+              restaurant.happyHour
+                ?.startTime
+            }
             {" – "}
-            {restaurant.happyHour?.endTime}
+            {
+              restaurant.happyHour
+                ?.endTime
+            }
           </HappyHourInfo>
+        )}
+
+        {favoriteMessage && (
+          <FavoriteMessage
+            $error={favoriteError}
+          >
+            {favoriteMessage}
+          </FavoriteMessage>
         )}
 
         <ViewButton
