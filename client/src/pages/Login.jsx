@@ -35,9 +35,19 @@ function Login() {
         formData
       );
 
-      localStorage.setItem("token", response.data.token);
+      localStorage.setItem(
+        "token",
+        response.data.token
+      );
 
-      window.dispatchEvent(new Event("auth-change"));
+      localStorage.setItem(
+        "user",
+        JSON.stringify(response.data.user)
+      );
+
+      window.dispatchEvent(
+        new Event("auth-change")
+      );
 
       navigate("/restaurants");
     } catch (err) {
@@ -64,6 +74,7 @@ function Login() {
         <Form onSubmit={handleSubmit}>
           <Label>
             Email
+
             <Input
               type="email"
               name="email"
@@ -76,6 +87,7 @@ function Login() {
 
           <Label>
             Password
+
             <Input
               type="password"
               name="password"
@@ -86,15 +98,25 @@ function Login() {
             />
           </Label>
 
-          {error && <ErrorMessage>{error}</ErrorMessage>}
+          {error && (
+            <ErrorMessage>
+              {error}
+            </ErrorMessage>
+          )}
 
-          <SubmitButton type="submit" disabled={loading}>
-            {loading ? "Logging in..." : "Login"}
+          <SubmitButton
+            type="submit"
+            disabled={loading}
+          >
+            {loading
+              ? "Logging in..."
+              : "Login"}
           </SubmitButton>
         </Form>
 
         <BottomText>
           Don&apos;t have an account?{" "}
+
           <RegisterLink to="/register">
             Create one
           </RegisterLink>

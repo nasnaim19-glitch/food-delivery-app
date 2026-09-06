@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import styled from "styled-components";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const API_URL = "http://localhost:3001/api/cart";
+const ORDERS_API_URL = "http://localhost:3001/api/orders";
 
 function Cart() {
+  const navigate = useNavigate();
+
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatingItemId, setUpdatingItemId] = useState(null);
+  const [checkingOut, setCheckingOut] = useState(false);
 
   useEffect(() => {
     const fetchCart = async () => {
@@ -102,6 +106,46 @@ function Cart() {
     }
   };
 
+  const handleCheckout = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        setError("Please log in before placing an order.");
+        return;
+      }
+
+      if (!cart?.items?.length) {
+        setError("Your cart is empty.");
+        return;
+      }
+
+      setCheckingOut(true);
+      setError("");
+
+      const response = await axios.post(
+        ORDERS_API_URL,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const newOrderId = response.data.order.id;
+
+      navigate(`/orders/${newOrderId}`);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to place your order."
+      );
+    } finally {
+      setCheckingOut(false);
+    }
+  };
+
   if (loading) {
     return (
       <Page>
@@ -114,7 +158,10 @@ function Cart() {
     return (
       <Page>
         <Message>{error}</Message>
-        <HomeLink to="/">Back to home</HomeLink>
+
+        <HomeLink to="/">
+          Back to home
+        </HomeLink>
       </Page>
     );
   }
@@ -124,17 +171,27 @@ function Cart() {
       <Header>
         <div>
           <Eyebrow>Your order</Eyebrow>
+
           <h1>Shopping Cart</h1>
-          <p>Review your delicious picks before checkout.</p>
+
+          <p>
+            Review your delicious picks before checkout.
+          </p>
         </div>
       </Header>
 
-      {error && <ErrorMessage>{error}</ErrorMessage>}
+      {error && (
+        <ErrorMessage>
+          {error}
+        </ErrorMessage>
+      )}
 
       {!cart?.items?.length ? (
         <EmptyCart>
           <span>🛒</span>
+
           <h2>Your cart is empty</h2>
+
           <p>
             Explore our restaurants and add something delicious.
           </p>
@@ -158,9 +215,13 @@ function Cart() {
                   />
 
                   <ProductInfo>
-                    <h3>{item.product.name}</h3>
+                    <h3>
+                      {item.product.name}
+                    </h3>
 
-                    <p>{item.product.description}</p>
+                    <p>
+                      {item.product.description}
+                    </p>
 
                     <ControlsRow>
                       <QuantityControls>
@@ -174,7 +235,8 @@ function Cart() {
                           }
                           disabled={
                             item.quantity <= 1 ||
-                            isUpdating
+                            isUpdating ||
+                            checkingOut
                           }
                         >
                           −
@@ -192,7 +254,10 @@ function Cart() {
                               item.quantity + 1
                             )
                           }
-                          disabled={isUpdating}
+                          disabled={
+                            isUpdating ||
+                            checkingOut
+                          }
                         >
                           +
                         </QuantityButton>
@@ -212,7 +277,10 @@ function Cart() {
                       onClick={() =>
                         removeItem(item.id)
                       }
-                      disabled={isUpdating}
+                      disabled={
+                        isUpdating ||
+                        checkingOut
+                      }
                     >
                       {isUpdating
                         ? "Updating..."
@@ -249,8 +317,14 @@ function Cart() {
               </strong>
             </TotalRow>
 
-            <CheckoutButton type="button">
-              Continue to checkout
+            <CheckoutButton
+              type="button"
+              onClick={handleCheckout}
+              disabled={checkingOut}
+            >
+              {checkingOut
+                ? "Placing order..."
+                : "Continue to checkout"}
             </CheckoutButton>
           </Summary>
         </CartLayout>
@@ -367,6 +441,7 @@ const QuantityButton = styled.button`
   color: var(--primary);
   font-size: 1.2rem;
   font-weight: 800;
+  cursor: pointer;
 
   &:hover:not(:disabled) {
     background: var(--primary-soft);
@@ -397,6 +472,7 @@ const RemoveButton = styled.button`
   background: var(--pink-soft);
   color: #9a4f45;
   font-weight: 800;
+  cursor: pointer;
 
   &:hover:not(:disabled) {
     opacity: 0.85;
@@ -453,6 +529,11 @@ const CheckoutButton = styled.button`
   color: white;
   font-weight: 800;
   cursor: pointer;
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
 `;
 
 const EmptyCart = styled.section`
