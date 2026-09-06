@@ -26,7 +26,7 @@ const Logo = styled(NavLink)`
 const Links = styled.div`
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 18px;
 `;
 
 const StyledLink = styled(NavLink)`
@@ -56,6 +56,44 @@ const CartLink = styled(NavLink)`
   &:hover {
     transform: translateY(-1px);
   }
+`;
+
+const OrdersLink = styled(NavLink)`
+  text-decoration: none;
+  color: #7a4b1f;
+  font-weight: 700;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  transition: 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &.active {
+    color: #7a4b1f;
+  }
+`;
+
+const UserBadge = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: #f7f4ef;
+  color: #3f3a37;
+  font-weight: 700;
+`;
+
+const UserIcon = styled.span`
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: var(--primary-soft);
 `;
 
 const LoginButton = styled(NavLink)`
@@ -96,31 +134,65 @@ function Navbar() {
     Boolean(localStorage.getItem("token"))
   );
 
+  const [user, setUser] = useState(() => {
+    const storedUser = localStorage.getItem("user");
+
+    return storedUser ? JSON.parse(storedUser) : null;
+  });
+
   useEffect(() => {
     const updateAuthState = () => {
-      setIsLoggedIn(Boolean(localStorage.getItem("token")));
+      const token = localStorage.getItem("token");
+      const storedUser = localStorage.getItem("user");
+
+      setIsLoggedIn(Boolean(token));
+
+      setUser(
+        storedUser
+          ? JSON.parse(storedUser)
+          : null
+      );
     };
 
-    window.addEventListener("auth-change", updateAuthState);
-    window.addEventListener("storage", updateAuthState);
+    window.addEventListener(
+      "auth-change",
+      updateAuthState
+    );
+
+    window.addEventListener(
+      "storage",
+      updateAuthState
+    );
 
     return () => {
-      window.removeEventListener("auth-change", updateAuthState);
-      window.removeEventListener("storage", updateAuthState);
+      window.removeEventListener(
+        "auth-change",
+        updateAuthState
+      );
+
+      window.removeEventListener(
+        "storage",
+        updateAuthState
+      );
     };
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
 
-    window.dispatchEvent(new Event("auth-change"));
+    window.dispatchEvent(
+      new Event("auth-change")
+    );
 
     navigate("/login");
   };
 
   return (
     <Nav>
-      <Logo to="/">FreshBite</Logo>
+      <Logo to="/">
+        FreshBite
+      </Logo>
 
       <Links>
         <StyledLink to="/">
@@ -135,6 +207,19 @@ function Navbar() {
           <CartLink to="/cart">
             🛒 Cart
           </CartLink>
+        )}
+
+        {isLoggedIn && (
+          <OrdersLink to="/orders">
+            🧾 My Orders
+          </OrdersLink>
+        )}
+
+        {isLoggedIn && user && (
+          <UserBadge>
+            <UserIcon>👤</UserIcon>
+            {user.name}
+          </UserBadge>
         )}
 
         {isLoggedIn ? (
