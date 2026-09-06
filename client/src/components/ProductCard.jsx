@@ -19,6 +19,7 @@ const Card = styled.article`
 `;
 
 const ImageWrapper = styled.div`
+  position: relative;
   height: 190px;
   overflow: hidden;
   background: var(--surface-soft);
@@ -28,6 +29,19 @@ const Image = styled.img`
   width: 100%;
   height: 100%;
   object-fit: cover;
+`;
+
+const DiscountBadge = styled.span`
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #ff6b57;
+  color: white;
+  font-size: 0.82rem;
+  font-weight: 900;
+  box-shadow: 0 6px 18px rgba(255, 107, 87, 0.28);
 `;
 
 const Content = styled.div`
@@ -47,13 +61,34 @@ const Name = styled.h3`
   color: var(--text);
 `;
 
-const Price = styled.span`
+const PriceArea = styled.div`
+  display: grid;
+  justify-items: end;
+  gap: 4px;
   flex-shrink: 0;
+`;
+
+const RegularPrice = styled.span`
   padding: 6px 10px;
   border-radius: 999px;
   background: var(--accent-soft);
   color: #7a4b1f;
   font-weight: 800;
+`;
+
+const OriginalPrice = styled.span`
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  text-decoration: line-through;
+`;
+
+const HappyPrice = styled.span`
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #ffe8e4;
+  color: #d84f3c;
+  font-weight: 900;
+  font-size: 1.05rem;
 `;
 
 const Description = styled.p`
@@ -78,6 +113,16 @@ const Availability = styled.span`
   font-weight: 700;
 `;
 
+const HappyHourMessage = styled.div`
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff4ec;
+  color: #b84f22;
+  font-size: 0.9rem;
+  font-weight: 800;
+`;
+
 const AddButton = styled.button`
   width: 100%;
   margin-top: 16px;
@@ -88,6 +133,7 @@ const AddButton = styled.button`
   color: white;
   font-weight: 800;
   transition: 0.2s ease;
+  cursor: pointer;
 
   &:hover:not(:disabled) {
     transform: translateY(-1px);
@@ -150,6 +196,15 @@ function ProductCard({ product }) {
     }
   };
 
+  const isHappyHour =
+    product.isHappyHourPrice === true;
+
+  const originalPrice =
+    product.originalPrice ?? product.price;
+
+  const effectivePrice =
+    product.effectivePrice ?? product.price;
+
   return (
     <Card>
       <ImageWrapper>
@@ -157,12 +212,35 @@ function ProductCard({ product }) {
           src={product.imageUrl}
           alt={product.name}
         />
+
+        {isHappyHour && (
+          <DiscountBadge>
+            🔥 {product.discountPercent}% OFF
+          </DiscountBadge>
+        )}
       </ImageWrapper>
 
       <Content>
         <TopRow>
           <Name>{product.name}</Name>
-          <Price>₪{product.price}</Price>
+
+          <PriceArea>
+            {isHappyHour ? (
+              <>
+                <OriginalPrice>
+                  ₪{Number(originalPrice).toFixed(2)}
+                </OriginalPrice>
+
+                <HappyPrice>
+                  ₪{Number(effectivePrice).toFixed(2)}
+                </HappyPrice>
+              </>
+            ) : (
+              <RegularPrice>
+                ₪{Number(product.price).toFixed(2)}
+              </RegularPrice>
+            )}
+          </PriceArea>
         </TopRow>
 
         <Description>
@@ -172,6 +250,12 @@ function ProductCard({ product }) {
         <Availability $available={product.isAvailable}>
           {product.isAvailable ? "Available" : "Unavailable"}
         </Availability>
+
+        {isHappyHour && (
+          <HappyHourMessage>
+            🔥 Happy Hour price is active now
+          </HappyHourMessage>
+        )}
 
         <AddButton
           type="button"

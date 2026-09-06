@@ -28,16 +28,22 @@ model User {
 }
 
 model Restaurant {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   name        String
   description String?
   imageUrl    String?
   city        String?
   address     String?
-  rating      Float    @default(0)
-  isOpen      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  rating      Float   @default(0)
+  isOpen      Boolean @default(true)
+
+  happyHourStartMinutes Int?
+  happyHourEndMinutes   Int?
+  happyHourDiscount     Int     @default(50)
+  happyHourEnabled      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   categories MenuCategory[]
   orders     Order[]
@@ -106,18 +112,20 @@ model Order {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
-  user       User       @relation(fields: [userId], references: [id])
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  user       User        @relation(fields: [userId], references: [id])
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
   items      OrderItem[]
 }
 
 model OrderItem {
-  id          Int    @id @default(autoincrement())
-  orderId     Int
-  productId   Int
-  productName String
-  unitPrice   Float
-  quantity    Int
+  id                Int    @id @default(autoincrement())
+  orderId           Int
+  productId         Int
+  productName       String
+  unitPrice         Float
+  originalUnitPrice Float?
+  discountPercent   Int    @default(0)
+  quantity          Int
 
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
