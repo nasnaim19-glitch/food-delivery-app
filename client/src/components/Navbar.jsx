@@ -44,6 +44,25 @@ const StyledLink = styled(NavLink)`
   }
 `;
 
+const FavoritesLink = styled(NavLink)`
+  text-decoration: none;
+  color: #b64747;
+  font-weight: 700;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: #fff0f0;
+  transition: 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: #ffe5e5;
+  }
+
+  &.active {
+    color: #b64747;
+  }
+`;
+
 const CartLink = styled(NavLink)`
   text-decoration: none;
   color: #2f6f61;
@@ -202,6 +221,12 @@ function Navbar() {
         <StyledLink to="/restaurants">
           Restaurants
         </StyledLink>
+
+        {isLoggedIn && (
+          <FavoritesLink to="/favorites">
+            ❤️ Favorites
+          </FavoritesLink>
+        )}
 
         {isLoggedIn && (
           <CartLink to="/cart">

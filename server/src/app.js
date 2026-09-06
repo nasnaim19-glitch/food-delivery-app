@@ -7,11 +7,14 @@ import restaurantRoutes from "./routes/restaurantRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
+import favoriteRoutes from "./routes/favoriteRoutes.js";
 
 const app = express();
 
 app.use(cors());
+
 app.use(express.json());
+
 app.use(morgan("dev"));
 
 app.get("/", (req, res) => {
@@ -21,9 +24,15 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+
 app.use("/api/restaurants", restaurantRoutes);
+
 app.use("/api/products", productRoutes);
+
 app.use("/api/cart", cartRoutes);
+
 app.use("/api/orders", orderRoutes);
+
+app.use("/api/favorites", favoriteRoutes);
 
 export default app;
