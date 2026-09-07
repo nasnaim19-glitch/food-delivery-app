@@ -1,0 +1,41 @@
+Food Delivery App - Third Party Licenses
+
+This project uses open-source software packages.
+
+Main frontend dependencies include:
+- React
+- React DOM
+- React Router DOM
+- Axios
+- Styled Components
+- Vite
+- Vitest
+- Testing Library
+- jsdom
+- ESLint
+
+Main backend dependencies include:
+- Express
+- Prisma
+- @prisma/client
+- bcrypt
+- cors
+- dotenv
+- jsonwebtoken
+- morgan
+- winston
+- supertest
+
+These packages are distributed under their respective open-source licenses.
+
+Common licenses used by these dependencies include:
+- MIT License
+- Apache License 2.0
+- BSD License
+- ISC License
+
+For exact license information for each package, see the package metadata inside:
+- client/node_modules
+- server/node_modules
+
+This project itself is an educational Full-Stack project.
