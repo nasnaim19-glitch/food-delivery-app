@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
@@ -65,7 +66,7 @@ jobs:
         run: npx prisma generate
 
       - name: Run server tests
-        run: npm test
+        run: node --test --test-concurrency=1
 
   docker-build:
     name: Docker Build
