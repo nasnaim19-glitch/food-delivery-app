@@ -1,13 +1,22 @@
 import express from "express";
+
 import cors from "cors";
+
 import morgan from "morgan";
 
 import authRoutes from "./routes/authRoutes.js";
+
 import restaurantRoutes from "./routes/restaurantRoutes.js";
+
 import productRoutes from "./routes/productRoutes.js";
+
 import cartRoutes from "./routes/cartRoutes.js";
+
 import orderRoutes from "./routes/orderRoutes.js";
+
 import favoriteRoutes from "./routes/favoriteRoutes.js";
+
+import recommendationRoutes from "./routes/recommendationRoutes.js";
 
 const app = express();
 
@@ -34,5 +43,10 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
 
 app.use("/api/favorites", favoriteRoutes);
+
+app.use(
+  "/api/recommendations",
+  recommendationRoutes
+);
 
 export default app;
