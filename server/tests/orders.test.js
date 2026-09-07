@@ -718,3 +718,107 @@ test(
     );
   }
 );
+
+test(
+  "POST /api/orders/:id/reorder should reject request without token",
+  async () => {
+    const response = await request(app)
+      .post("/api/orders/1/reorder")
+      .expect(401);
+
+    assert.equal(
+      response.body.message,
+      "Access denied. No token provided"
+    );
+  }
+);
+
+test(
+  "POST /api/orders/:id/reorder should reject invalid order ID",
+  async () => {
+    assert.ok(temporaryUserToken);
+
+    const response = await request(app)
+      .post("/api/orders/abc/reorder")
+      .set(
+        "Authorization",
+        `Bearer ${temporaryUserToken}`
+      )
+      .expect(400);
+
+    assert.equal(
+      response.body.message,
+      "Invalid order ID"
+    );
+  }
+);
+
+test(
+  "POST /api/orders/:id/reorder should add previous order items back to cart",
+  async () => {
+    assert.ok(temporaryUserToken);
+    assert.ok(trackingOrderId);
+
+    const cartBefore = await request(app)
+      .get("/api/cart")
+      .set(
+        "Authorization",
+        `Bearer ${temporaryUserToken}`
+      )
+      .expect(200);
+
+    for (const item of cartBefore.body.items) {
+      await request(app)
+        .delete(
+          `/api/cart/${item.id}`
+        )
+        .set(
+          "Authorization",
+          `Bearer ${temporaryUserToken}`
+        )
+        .expect(200);
+    }
+
+    const response = await request(app)
+      .post(
+        `/api/orders/${trackingOrderId}/reorder`
+      )
+      .set(
+        "Authorization",
+        `Bearer ${temporaryUserToken}`
+      )
+      .expect(200);
+
+    assert.equal(
+      response.body.message,
+      "Order added to cart successfully"
+    );
+
+    assert.equal(
+      response.body.sourceOrderId,
+      trackingOrderId
+    );
+
+    assert.ok(
+      response.body.restaurant
+    );
+
+    assert.ok(
+      response.body.cart
+    );
+
+    assert.ok(
+      Array.isArray(
+        response.body.cart.items
+      )
+    );
+
+    assert.ok(
+      response.body.cart.items.length > 0
+    );
+
+    assert.ok(
+      response.body.cart.total > 0
+    );
+  }
+);

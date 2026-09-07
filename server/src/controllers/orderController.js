@@ -273,9 +273,7 @@ const getTrackingInfo = (order) => {
   };
 };
 
-const syncOrderStatus = async (
-  order
-) => {
+const syncOrderStatus = async (order) => {
   const tracking =
     getTrackingInfo(order);
 
@@ -579,6 +577,324 @@ export const getOrderById = async (
       .json(
         orderWithTracking
       );
+  } catch (error) {
+    logger.error(error);
+
+    return res.status(500).json({
+      message:
+        "Internal server error",
+    });
+  }
+};
+
+// POST /api/orders/:id/reorder
+export const reorderOrder = async (
+  req,
+  res
+) => {
+  try {
+    const userId =
+      req.user.userId;
+
+    const orderId =
+      Number(
+        req.params.id
+      );
+
+    if (
+      !Number.isInteger(orderId) ||
+      orderId <= 0
+    ) {
+      return res.status(400).json({
+        message:
+          "Invalid order ID",
+      });
+    }
+
+    const previousOrder =
+      await prisma.order.findFirst({
+        where: {
+          id: orderId,
+          userId,
+        },
+
+        include: {
+          restaurant: true,
+
+          items: {
+            include: {
+              product: {
+                include: {
+                  category: {
+                    include: {
+                      restaurant: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+    if (!previousOrder) {
+      return res.status(404).json({
+        message:
+          "Order not found",
+      });
+    }
+
+    if (
+      previousOrder.items.length === 0
+    ) {
+      return res.status(400).json({
+        message:
+          "This order has no items to reorder",
+      });
+    }
+
+    const unavailableItems =
+      previousOrder.items.filter(
+        (item) =>
+          !item.product ||
+          !item.product.isAvailable
+      );
+
+    if (
+      unavailableItems.length > 0
+    ) {
+      return res.status(400).json({
+        message:
+          "Some products from this order are no longer available",
+
+        unavailableItems:
+          unavailableItems.map(
+            (item) => ({
+              productId:
+                item.productId,
+
+              productName:
+                item.productName,
+            })
+          ),
+      });
+    }
+
+    const restaurantId =
+      previousOrder.restaurantId;
+
+    const wrongRestaurantItem =
+      previousOrder.items.find(
+        (item) =>
+          item.product.category
+            .restaurantId !==
+          restaurantId
+      );
+
+    if (wrongRestaurantItem) {
+      return res.status(400).json({
+        message:
+          "Order contains products from multiple restaurants",
+      });
+    }
+
+    let cart =
+      await prisma.cart.findUnique({
+        where: {
+          userId,
+        },
+
+        include: {
+          items: {
+            include: {
+              product: {
+                include: {
+                  category: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+    if (!cart) {
+      cart =
+        await prisma.cart.create({
+          data: {
+            userId,
+          },
+
+          include: {
+            items: {
+              include: {
+                product: {
+                  include: {
+                    category: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+    }
+
+    if (
+      cart.items.length > 0
+    ) {
+      const currentCartRestaurantId =
+        cart.items[0].product.category
+          .restaurantId;
+
+      if (
+        currentCartRestaurantId !==
+        restaurantId
+      ) {
+        return res.status(400).json({
+          message:
+            "Your cart contains items from another restaurant. Please clear your cart before reordering.",
+        });
+      }
+    }
+
+    await prisma.$transaction(
+      async (tx) => {
+        for (
+          const item of
+          previousOrder.items
+        ) {
+          await tx.cartItem.upsert({
+            where: {
+              cartId_productId: {
+                cartId:
+                  cart.id,
+
+                productId:
+                  item.productId,
+              },
+            },
+
+            update: {
+              quantity: {
+                increment:
+                  item.quantity,
+              },
+            },
+
+            create: {
+              cartId:
+                cart.id,
+
+              productId:
+                item.productId,
+
+              quantity:
+                item.quantity,
+            },
+          });
+        }
+      }
+    );
+
+    const updatedCart =
+      await prisma.cart.findUnique({
+        where: {
+          id: cart.id,
+        },
+
+        include: {
+          items: {
+            include: {
+              product: {
+                include: {
+                  category: {
+                    include: {
+                      restaurant: true,
+                    },
+                  },
+                },
+              },
+            },
+
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
+        },
+      });
+
+    const reorderedItems =
+      updatedCart.items.map(
+        (item) => {
+          const pricing =
+            getProductPricing(
+              item.product
+            );
+
+          return {
+            ...item,
+
+            product: {
+              ...item.product,
+
+              originalPrice:
+                pricing.originalPrice,
+
+              effectivePrice:
+                pricing.effectivePrice,
+
+              discountPercent:
+                pricing.discountPercent,
+
+              isHappyHourPrice:
+                pricing.isHappyHour,
+            },
+
+            lineTotal:
+              Number(
+                (
+                  pricing.effectivePrice *
+                  item.quantity
+                ).toFixed(2)
+              ),
+          };
+        }
+      );
+
+    const total =
+      Number(
+        reorderedItems
+          .reduce(
+            (sum, item) =>
+              sum +
+              item.lineTotal,
+            0
+          )
+          .toFixed(2)
+      );
+
+    return res.status(200).json({
+      message:
+        "Order added to cart successfully",
+
+      sourceOrderId:
+        previousOrder.id,
+
+      restaurant:
+        previousOrder.restaurant,
+
+      cart: {
+        id:
+          updatedCart.id,
+
+        userId:
+          updatedCart.userId,
+
+        items:
+          reorderedItems,
+
+        total,
+      },
+    });
   } catch (error) {
     logger.error(error);
 
